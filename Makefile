@@ -4,9 +4,10 @@
 # Execute go build
 # Copy files to machine go/bin folder (temp target to avoid manual steps when developing locally)
 
-all:format clean dir gen build-linux build-linux-arm build-darwin build-darwin-arm build-windows copy install-cyclonedx
-# all:format clean dir gen build-linux build-linux-arm build-darwin build-darwin-arm build-windows copy install-cyclonedx tests
-.PHONY: build-darwin-arm build-darwin build-linux build-linux-arm build-windows tests
+simple:clean dir build-all copy
+all:format clean dir gen build-all copy install-cyclonedx
+# all:format clean dir gen build-all copy install-cyclonedx tests
+.PHONY: build-all tests
 
 GOCMD=go
 GOBUILD=$(GOCMD) build
@@ -40,6 +41,8 @@ endif
 ifeq ($(shell uname -m),x86_64)
 	CYCLONEDX_ARCH=x64
 else ifeq ($(shell uname -m),arm64)
+	CYCLONEDX_ARCH=arm64
+else ifeq ($(shell uname -m),i686)
 	CYCLONEDX_ARCH=arm64
 else ifeq ($(shell uname -m),i386)
 	CYCLONEDX_ARCH=x86
@@ -87,6 +90,8 @@ gen:
 	go generate
 
 # build for each platform
+build-all: build-linux build-linux-arm build-darwin build-darwin-arm build-windows build-windows-arm
+
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o release/$(BINARY_NAME)_linux -v
 
@@ -102,10 +107,18 @@ build-darwin-arm:
 build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) -o release/$(BINARY_NAME)_windows -v
 
+build-windows-arm:
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GOBUILD) -o release/$(BINARY_NAME)_windows_arm -v
+
+
 # use for local development - > copy the new bin to go/bin path to use new compiled version
 copy:
 ifeq ($(OS),Windows_NT)
+ifeq (${CYCLONEDX_ARCH},arm64)
+	cp $(CURDIR)/release/$(BINARY_NAME)_windows_arm $(GOPATH)/bin/$(BINARY_NAME).exe
+else
 	cp $(CURDIR)/release/$(BINARY_NAME)_windows $(GOPATH)/bin/$(BINARY_NAME).exe
+endif
 else
 	cp $(CURDIR)/release/$(BINARY_NAME) $(GOPATH)/bin/
 	cp $(CURDIR)/release/$(BINARY_NAME) $~/usr/local/bin/
@@ -118,7 +131,7 @@ install-cyclonedx:
 	echo "${CYCLONEDX_GOMOD_BINARY} version"
 	${CYCLONEDX_GOMOD_BINARY} version
 
-# install cyclonedx-cli	
+# install cyclonedx-cli
 	curl -fsSLO --compressed "https://github.com/CycloneDX/cyclonedx-cli/releases/download/v${CYCLONEDX_CLI_VERSION}/${CYCLONEDX_CLI_BINARY}-${CYCLONEDX_OS}-${CYCLONEDX_ARCH}${CYCLONEDX_BINARY_SUFFIX}"
 	mv ${CYCLONEDX_CLI_BINARY}-${CYCLONEDX_OS}-${CYCLONEDX_ARCH}${CYCLONEDX_BINARY_SUFFIX} $(GOPATH)/bin/${CYCLONEDX_CLI_BINARY}${CYCLONEDX_BINARY_SUFFIX}
 	echo "${CYCLONEDX_CLI_BINARY} version:"
